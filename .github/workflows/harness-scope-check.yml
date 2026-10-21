@@ -1,0 +1,37 @@
+name: AI Buddy Gate - Scope Check
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scope-check:
+    name: scope-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out trusted base branch code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run trusted offline checker tests
+        run: python3 -m unittest discover -s gate -p 'test_*.py' -v
+
+      - name: Validate pull request change scope
+        if: github.event_name == 'pull_request'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "refs/pull/${PR_NUMBER}/merge"
+          MERGE_SHA="$(git rev-parse FETCH_HEAD)"
+          python3 gate/check_scope.py "$BASE_SHA" "$MERGE_SHA"
