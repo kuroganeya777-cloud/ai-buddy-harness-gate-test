@@ -1,0 +1,39 @@
+# Prototype; Environment ai-buddy-owner-approval requires owner review.
+name: AI Buddy Gate - Owner Approval
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: owner-approval-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  owner-approval:
+    name: owner-approval
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment:
+      name: ai-buddy-owner-approval
+    steps:
+      - name: Record approved candidate SHA
+        shell: bash
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test "$BASE_REF" = "main"
+          case "$HEAD_SHA" in
+            ""|*[!0123456789abcdefABCDEF]*) echo 'Invalid head SHA'; exit 1 ;;
+          esac
+          test "${#HEAD_SHA}" -eq 40
+          echo "Owner-gated check for ${REPO} PR #${PR_NUMBER}, commit ${HEAD_SHA}"
+          echo 'No merge, push, release, or deployment.'
